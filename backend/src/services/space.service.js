@@ -1,4 +1,3 @@
-const { Op } = require("sequelize");
 const ApiError = require("../utils/ApiError");
 const { Space, Booking } = require("../models");
 const {
@@ -10,7 +9,7 @@ const {
 // ── Helper ───────────────────────────────────────────────────────────────────
 const toPlain = (instance) => {
 	if (!instance) return null;
-	return instance.get ? instance.get({ plain: true }) : { ...instance };
+	return instance.toObject ? instance.toObject() : { ...instance };
 };
 
 // ── Service methods ──────────────────────────────────────────────────────────
@@ -23,27 +22,26 @@ const listSpaces = async (query = {}) => {
 	const where = {};
 
 	if (value.type) {
-		// Case-insensitive exact match using PostgreSQL ILIKE
-		where.type = { [Op.iLike]: value.type };
+		// Case-insensitive exact match using regex
+		where.type = new RegExp(`^${value.type}$`, "i");
 	}
 
 	if (value.minCapacity !== undefined || value.maxCapacity !== undefined) {
 		where.capacity = {};
 		if (value.minCapacity !== undefined) {
-			where.capacity[Op.gte] = value.minCapacity;
+			where.capacity.$gte = value.minCapacity;
 		}
 		if (value.maxCapacity !== undefined) {
-			where.capacity[Op.lte] = value.maxCapacity;
+			where.capacity.$lte = value.maxCapacity;
 		}
 	}
 
-	const spaces = await Space.findAll({ where, order: [["id", "ASC"]] });
+	const spaces = await Space.find(where).sort({ _id: 1 });
 	return spaces.map(toPlain);
 };
 
 const getSpaceById = async (spaceId) => {
-	const id = Number(spaceId);
-	const space = await Space.findByPk(id);
+	const space = await Space.findById(spaceId);
 
 	if (!space) {
 		throw ApiError.notFound("Space not found");
@@ -60,7 +58,7 @@ const createSpace = async (payload = {}) => {
 
 	// Case-insensitive duplicate name check
 	const duplicate = await Space.findOne({
-		where: { name: { [Op.iLike]: value.name } },
+		name: new RegExp(`^${value.name}$`, "i"),
 	});
 	if (duplicate) {
 		throw ApiError.conflict("Space with the same name already exists");
@@ -76,42 +74,43 @@ const updateSpace = async (payload = {}) => {
 		throw ApiError.badRequest("Invalid update payload", errors);
 	}
 
-	const existing = await Space.findByPk(value.id);
+	const existing = await Space.findById(value.id);
 	if (!existing) {
 		throw ApiError.notFound("Space not found");
 	}
 
 	// Case-insensitive duplicate name check (excluding self)
 	const duplicate = await Space.findOne({
-		where: {
-			id: { [Op.ne]: value.id },
-			name: { [Op.iLike]: value.name },
-		},
+		_id: { $ne: value.id },
+		name: new RegExp(`^${value.name}$`, "i"),
 	});
 	if (duplicate) {
 		throw ApiError.conflict("Another space with the same name already exists");
 	}
 
-	await existing.update({
-		name: value.name,
-		type: value.type,
-		capacity: value.capacity,
-		imageUrl: value.imageUrl,
-	});
-	return toPlain(existing);
+	const updated = await Space.findByIdAndUpdate(
+		value.id,
+		{
+			name: value.name,
+			type: value.type,
+			capacity: value.capacity,
+			imageUrl: value.imageUrl,
+		},
+		{ new: true }
+	);
+	return toPlain(updated);
 };
 
 const deleteSpace = async (spaceId) => {
-	const id = Number(spaceId);
-	const space = await Space.findByPk(id);
+	const space = await Space.findById(spaceId);
 	if (!space) {
 		throw ApiError.notFound("Space not found");
 	}
 
 	// Delete all bookings referencing this space (cascade behaviour)
-	await Booking.destroy({ where: { spaceId: space.id } });
+	await Booking.deleteMany({ spaceId: space.id });
 
-	await space.destroy();
+	await space.deleteOne();
 	return toPlain(space);
 };
 

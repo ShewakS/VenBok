@@ -1,68 +1,72 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../config/db");
+const mongoose = require("mongoose");
 
-const User = sequelize.define(
-	"User",
+const userSchema = new mongoose.Schema(
 	{
-		id: {
-			type: DataTypes.INTEGER,
-			primaryKey: true,
-			autoIncrement: true,
-		},
 		name: {
-			type: DataTypes.STRING(80),
-			allowNull: false,
-			validate: {
-				notEmpty: true,
-				len: [1, 80],
-			},
+			type: String,
+			required: true,
+			trim: true,
+			minlength: 1,
+			maxlength: 80,
 		},
 		email: {
-			type: DataTypes.STRING,
-			allowNull: false,
+			type: String,
+			required: true,
 			unique: true,
-			defaultValue: "",
-			validate: {
-				isEmail: true,
-			},
-			set(value) {
-				this.setDataValue("email", typeof value === "string" ? value.trim().toLowerCase() : value);
-			},
+			trim: true,
+			lowercase: true,
+			default: "",
 		},
 		password: {
-			type: DataTypes.STRING,
-			allowNull: false,
-			defaultValue: "",
+			type: String,
+			required: true,
+			default: "",
 		},
 		phone: {
-			type: DataTypes.STRING(20),
-			allowNull: false,
-			defaultValue: "",
+			type: String,
+			required: true,
+			default: "",
+			maxlength: 20,
 		},
 		roleDescription: {
-			type: DataTypes.STRING(120),
-			allowNull: false,
-			defaultValue: "",
-			field: "role_description",
+			type: String,
+			required: true,
+			default: "",
+			maxlength: 120,
 		},
 		role: {
-			type: DataTypes.ENUM("admin", "faculty", "student", "coordinator"),
-			allowNull: false,
+			type: String,
+			required: true,
+			enum: ["admin", "faculty", "student", "coordinator"],
 		},
 		status: {
-			type: DataTypes.STRING(16),
-			allowNull: false,
-			defaultValue: "active",
-			validate: {
-				isIn: [["active"]],
-			},
+			type: String,
+			required: true,
+			default: "active",
+			enum: ["active"],
 		},
 	},
 	{
-		tableName: "users",
 		timestamps: true,
-		underscored: true,
+		toJSON: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
+		toObject: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
 	}
 );
 
-module.exports = User;
+module.exports = mongoose.model("User", userSchema);

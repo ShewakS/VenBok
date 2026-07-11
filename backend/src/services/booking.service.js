@@ -1,4 +1,3 @@
-const { Op } = require("sequelize");
 const ApiError = require("../utils/ApiError");
 const { Booking, Space, TimetableOverride, User } = require("../models");
 const {
@@ -12,7 +11,7 @@ const hasOverlap = (startA, endA, startB, endB) => startA < endB && startB < end
 
 const toPlain = (instance) => {
 	if (!instance) return null;
-	return instance.get ? instance.get({ plain: true }) : { ...instance };
+	return instance.toObject ? instance.toObject() : { ...instance };
 };
 
 // ── Service methods ──────────────────────────────────────────────────────────
@@ -36,10 +35,7 @@ const listBookings = async (query = {}) => {
 		where.date = value.date;
 	}
 
-	const bookings = await Booking.findAll({
-		where,
-		order: [["id", "DESC"]],
-	});
+	const bookings = await Booking.find(where).sort({ _id: -1 });
 
 	const bookingRows = bookings.map(toPlain);
 	const requestedNames = Array.from(
@@ -51,14 +47,9 @@ const listBookings = async (query = {}) => {
 	);
 
 	const users = requestedNames.length
-		? await User.findAll({
-				where: {
-					name: {
-						[Op.in]: requestedNames,
-					},
-				},
-				attributes: ["name", "phone"],
-		  })
+		? await User.find({
+			name: { $in: requestedNames },
+		}).select("name phone")
 		: [];
 
 	const phoneByName = new Map(
@@ -75,8 +66,7 @@ const listBookings = async (query = {}) => {
 };
 
 const getBookingById = async (bookingId) => {
-	const id = Number(bookingId);
-	const booking = await Booking.findByPk(id);
+	const booking = await Booking.findById(bookingId);
 
 	if (!booking) {
 		throw ApiError.notFound("Booking not found");
@@ -91,7 +81,7 @@ const createBooking = async (payload = {}) => {
 		throw ApiError.badRequest("Invalid booking payload", errors);
 	}
 
-	const space = await Space.findByPk(value.spaceId);
+	const space = await Space.findById(value.spaceId);
 	if (!space) {
 		throw ApiError.notFound("Space not found");
 	}
@@ -101,12 +91,10 @@ const createBooking = async (payload = {}) => {
 	}
 
 	// Fetch same-day bookings for this space (excluding Rejected)
-	const sameDayBookings = await Booking.findAll({
-		where: {
-			spaceId: value.spaceId,
-			date: value.date,
-			status: { [Op.ne]: "Rejected" },
-		},
+	const sameDayBookings = await Booking.find({
+		spaceId: value.spaceId,
+		date: value.date,
+		status: { $ne: "Rejected" },
 	});
 
 	const conflict = sameDayBookings.find((booking) =>
@@ -118,12 +106,10 @@ const createBooking = async (payload = {}) => {
 	}
 
 	// Check for academic reserved slots — if overlapping, reject immediately
-	const academicOverrides = await TimetableOverride.findAll({
-		where: {
-			spaceId: value.spaceId,
-			date: value.date,
-			status: "academic",
-		},
+	const academicOverrides = await TimetableOverride.find({
+		spaceId: value.spaceId,
+		date: value.date,
+		status: "academic",
 	});
 
 	const academicConflict = academicOverrides.find((override) =>
@@ -141,8 +127,7 @@ const createBooking = async (payload = {}) => {
 };
 
 const updateBookingStatus = async (bookingId, payload = {}) => {
-	const id = Number(bookingId);
-	const existing = await Booking.findByPk(id);
+	const existing = await Booking.findById(bookingId);
 	if (!existing) {
 		throw ApiError.notFound("Booking not found");
 	}
@@ -156,19 +141,19 @@ const updateBookingStatus = async (bookingId, payload = {}) => {
 		throw ApiError.badRequest("Booking status is final and cannot be changed");
 	}
 
-	await existing.update({ status: value.status });
+	existing.status = value.status;
+	await existing.save();
 	return toPlain(existing);
 };
 
 const deleteBooking = async (bookingId) => {
-	const id = Number(bookingId);
-	const booking = await Booking.findByPk(id);
+	const booking = await Booking.findById(bookingId);
 
 	if (!booking) {
 		throw ApiError.notFound("Booking not found");
 	}
 
-	await booking.destroy();
+	await booking.deleteOne();
 	return toPlain(booking);
 };
 
@@ -198,26 +183,29 @@ const getReport = async (query = {}) => {
 
 	const formatDate = (date) => date.toISOString().slice(0, 10);
 
-	const bookings = await Booking.findAll({
-		where: {
-			date: {
-				[Op.gte]: formatDate(fromDate),
-				[Op.lt]: formatDate(toDate),
-			},
+	const bookings = await Booking.find({
+		date: {
+			$gte: formatDate(fromDate),
+			$lt: formatDate(toDate),
 		},
-		order: [["date", "ASC"], ["start", "ASC"]],
-	});
+	}).sort({ date: 1, start: 1 });
 
 	const bookingRows = bookings.map(toPlain);
-	const uniqueSpaceIds = Array.from(new Set(bookingRows.map((booking) => booking.spaceId).filter(Boolean)));
+	const uniqueSpaceIds = Array.from(
+		new Set(
+			bookingRows
+				.map((booking) => (booking.spaceId ? booking.spaceId.toString() : ""))
+				.filter(Boolean)
+		)
+	);
 	const spaces = uniqueSpaceIds.length
-		? await Space.findAll({ where: { id: uniqueSpaceIds } })
+		? await Space.find({ _id: { $in: uniqueSpaceIds } })
 		: [];
 	const spaceNameById = new Map(spaces.map((space) => [space.id, space.name]));
 
 	const bookingsWithSpace = bookingRows.map((booking) => ({
 		...booking,
-		spaceName: spaceNameById.get(booking.spaceId) || "-",
+		spaceName: spaceNameById.get(booking.spaceId ? booking.spaceId.toString() : "") || "-",
 	}));
 
 	const statusTotals = bookingsWithSpace.reduce(

@@ -19,7 +19,7 @@ const createSpace = asyncHandler(async (req, res) => {
 });
 
 const updateSpace = asyncHandler(async (req, res) => {
-	const space = await spaceService.updateSpace({ ...req.body, id: Number(req.params.id) });
+	const space = await spaceService.updateSpace({ ...req.body, id: req.params.id });
 	res.status(200).json(new ApiResponse(200, "Space updated successfully", space));
 });
 

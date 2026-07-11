@@ -1,64 +1,55 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../config/db");
+const mongoose = require("mongoose");
 
-const Space = sequelize.define(
-	"Space",
+const spaceSchema = new mongoose.Schema(
 	{
-		id: {
-			type: DataTypes.INTEGER,
-			primaryKey: true,
-			autoIncrement: true,
-		},
 		name: {
-			type: DataTypes.STRING(100),
-			allowNull: false,
+			type: String,
+			required: true,
 			unique: true,
-			validate: {
-				notEmpty: true,
-				len: [1, 100],
-			},
-			set(value) {
-				this.setDataValue("name", typeof value === "string" ? value.trim() : value);
-			},
+			trim: true,
+			minlength: 1,
+			maxlength: 100,
 		},
 		type: {
-			type: DataTypes.STRING(60),
-			allowNull: false,
-			validate: {
-				notEmpty: true,
-			},
-			set(value) {
-				this.setDataValue("type", typeof value === "string" ? value.trim() : value);
-			},
+			type: String,
+			required: true,
+			trim: true,
+			minlength: 1,
+			maxlength: 60,
 		},
 		capacity: {
-			type: DataTypes.INTEGER,
-			allowNull: false,
-			validate: {
-				min: 1,
-				max: 5000,
-			},
+			type: Number,
+			required: true,
+			min: 1,
+			max: 5000,
 		},
 		imageUrl: {
-			type: DataTypes.TEXT,
-			allowNull: true,
-			field: "image_url",
-			set(value) {
-				if (typeof value === "string") {
-					const trimmed = value.trim();
-					this.setDataValue("imageUrl", trimmed || null);
-					return;
-				}
-
-				this.setDataValue("imageUrl", value || null);
-			},
+			type: String,
+			trim: true,
+			default: null,
 		},
 	},
 	{
-		tableName: "spaces",
 		timestamps: true,
-		underscored: true,
+		toJSON: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
+		toObject: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
 	}
 );
 
-module.exports = Space;
+module.exports = mongoose.model("Space", spaceSchema);

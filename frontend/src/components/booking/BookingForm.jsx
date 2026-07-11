@@ -59,7 +59,7 @@ const BookingForm = ({ spaces, bookings, timetable, onAddBooking }) => {
 
     if (selectedSpace && form.date && form.start && form.end) {
       const overlapWithBookings = bookings.some((booking) => {
-        if (booking.spaceId !== Number(form.spaceId) || booking.date !== form.date) {
+        if (booking.spaceId !== form.spaceId || booking.date !== form.date) {
           return false;
         }
         return isTimeOverlapping(form.start, form.end, booking.start, booking.end);
@@ -67,7 +67,7 @@ const BookingForm = ({ spaces, bookings, timetable, onAddBooking }) => {
 
       const day = getDayAbbrev(form.date);
       const overlapWithTimetable = timetable.some((slot) => {
-        if (slot.spaceId !== Number(form.spaceId) || slot.day !== day) {
+        if (slot.spaceId !== form.spaceId || slot.day !== day) {
           return false;
         }
         return isTimeOverlapping(form.start, form.end, slot.start, slot.end);
@@ -96,7 +96,7 @@ const BookingForm = ({ spaces, bookings, timetable, onAddBooking }) => {
       const created = await onAddBooking({
         title: form.title,
         type: form.type,
-        spaceId: Number(form.spaceId),
+        spaceId: form.spaceId,
         date: form.date,
         start: form.start,
         end: form.end,

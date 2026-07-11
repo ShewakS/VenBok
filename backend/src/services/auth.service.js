@@ -9,8 +9,7 @@ const SALT_ROUNDS = 10;
 const isBcryptHash = (value) => typeof value === "string" && /^\$2[aby]\$\d{2}\$/.test(value);
 
 const sanitizeUser = (user) => {
-	// user is a Sequelize instance or plain object
-	const plain = user.get ? user.get({ plain: true }) : { ...user };
+	const plain = user.toObject ? user.toObject() : { ...user };
 	const { password, ...safeUser } = plain;
 	return safeUser;
 };
@@ -26,7 +25,7 @@ const login = async (payload = {}) => {
 		throw ApiError.badRequest("Invalid login payload", errors);
 	}
 
-	const user = await User.findOne({ where: { email: value.email } });
+	const user = await User.findOne({ email: value.email });
 	if (!user) {
 		throw ApiError.unauthorized("Account not found. Please register first.");
 	}
@@ -61,7 +60,7 @@ const register = async (payload = {}) => {
 		throw ApiError.badRequest("Invalid registration payload", errors);
 	}
 
-	const emailInUse = await User.findOne({ where: { email: value.email } });
+	const emailInUse = await User.findOne({ email: value.email });
 	if (emailInUse) {
 		throw ApiError.conflict("Email is already in use");
 	}
@@ -86,7 +85,7 @@ const register = async (payload = {}) => {
 };
 
 const getCurrentUser = async (userId) => {
-	const user = await User.findByPk(userId);
+	const user = await User.findById(userId);
 
 	if (!user) {
 		throw ApiError.notFound("User not found");

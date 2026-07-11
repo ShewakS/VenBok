@@ -1,65 +1,59 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../config/db");
+const mongoose = require("mongoose");
 
-const TimetableOverride = sequelize.define(
-	"TimetableOverride",
+const timetableOverrideSchema = new mongoose.Schema(
 	{
-		id: {
-			type: DataTypes.INTEGER,
-			primaryKey: true,
-			autoIncrement: true,
-		},
 		spaceId: {
-			type: DataTypes.INTEGER,
-			allowNull: false,
-			field: "space_id",
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Space",
+			required: true,
 		},
 		date: {
-			type: DataTypes.DATEONLY,
-			allowNull: false,
-			validate: {
-				isDate: true,
-			},
-			get() {
-				const raw = this.getDataValue("date");
-				if (!raw) return raw;
-				if (raw instanceof Date) {
-					return raw.toISOString().slice(0, 10);
-				}
-				return raw;
-			},
+			type: String,
+			required: true,
 		},
 		start: {
-			type: DataTypes.STRING(5),
-			allowNull: false,
-			validate: {
-				is: /^([01]\d|2[0-3]):([0-5]\d)$/,
-			},
+			type: String,
+			required: true,
+			match: /^([01]\d|2[0-3]):([0-5]\d)$/,
 		},
 		end: {
-			type: DataTypes.STRING(5),
-			allowNull: false,
-			validate: {
-				is: /^([01]\d|2[0-3]):([0-5]\d)$/,
-			},
+			type: String,
+			required: true,
+			match: /^([01]\d|2[0-3]):([0-5]\d)$/,
 		},
 		status: {
-			type: DataTypes.ENUM("academic", "available"),
-			allowNull: false,
-			defaultValue: "available",
+			type: String,
+			required: true,
+			default: "available",
+			enum: ["academic", "available"],
 		},
 	},
 	{
-		tableName: "timetable_overrides",
 		timestamps: true,
-		underscored: true,
-		indexes: [
-			{ fields: ["space_id", "date"] },
-			{ fields: ["space_id"] },
-			{ fields: ["date"] },
-			{ fields: ["status"] },
-		],
+		toJSON: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
+		toObject: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
 	}
 );
 
-module.exports = TimetableOverride;
+timetableOverrideSchema.index({ spaceId: 1, date: 1 });
+timetableOverrideSchema.index({ spaceId: 1 });
+timetableOverrideSchema.index({ date: 1 });
+timetableOverrideSchema.index({ status: 1 });
+
+module.exports = mongoose.model("TimetableOverride", timetableOverrideSchema);

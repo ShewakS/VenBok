@@ -1,105 +1,94 @@
-const { DataTypes } = require("sequelize");
-const { sequelize } = require("../config/db");
+const mongoose = require("mongoose");
 
-const Booking = sequelize.define(
-	"Booking",
+const bookingSchema = new mongoose.Schema(
 	{
-		id: {
-			type: DataTypes.INTEGER,
-			primaryKey: true,
-			autoIncrement: true,
-		},
 		title: {
-			type: DataTypes.STRING(120),
-			allowNull: false,
-			validate: {
-				notEmpty: true,
-				len: [1, 120],
-			},
+			type: String,
+			required: true,
+			trim: true,
+			minlength: 1,
+			maxlength: 120,
 		},
 		type: {
-			type: DataTypes.ENUM("Seminar", "Club", "Workshop", "Hackathon", "Training"),
-			allowNull: false,
+			type: String,
+			required: true,
+			enum: ["Seminar", "Club", "Workshop", "Hackathon", "Training"],
 		},
-		// Foreign key referencing spaces.id (no FK constraint enforced at DB level
-		// to stay consistent with the original loose-reference design)
 		spaceId: {
-			type: DataTypes.INTEGER,
-			allowNull: false,
-			field: "space_id",
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "Space",
+			required: true,
 		},
 		date: {
-			type: DataTypes.DATEONLY, // stores as YYYY-MM-DD string (no time)
-			allowNull: false,
-			validate: {
-				isDate: true,
-			},
-			get() {
-				const raw = this.getDataValue("date");
-				// DATEONLY from Sequelize may return a Date object; return as string
-				if (!raw) return raw;
-				if (raw instanceof Date) {
-					return raw.toISOString().slice(0, 10);
-				}
-				return raw;
-			},
+			type: String,
+			required: true,
 		},
 		start: {
-			type: DataTypes.STRING(5),
-			allowNull: false,
-			validate: {
-				is: /^([01]\d|2[0-3]):([0-5]\d)$/,
-			},
+			type: String,
+			required: true,
+			match: /^([01]\d|2[0-3]):([0-5]\d)$/,
 		},
 		end: {
-			type: DataTypes.STRING(5),
-			allowNull: false,
-			validate: {
-				is: /^([01]\d|2[0-3]):([0-5]\d)$/,
-			},
+			type: String,
+			required: true,
+			match: /^([01]\d|2[0-3]):([0-5]\d)$/,
 		},
 		participants: {
-			type: DataTypes.INTEGER,
-			allowNull: false,
-			validate: {
-				min: 1,
-			},
+			type: Number,
+			required: true,
+			min: 1,
 		},
 		organizedBy: {
-			type: DataTypes.STRING(100),
-			defaultValue: "",
-			field: "organized_by",
+			type: String,
+			default: "",
+			maxlength: 100,
 		},
 		notes: {
-			type: DataTypes.TEXT,
-			defaultValue: "",
+			type: String,
+			default: "",
 		},
 		requestedBy: {
-			type: DataTypes.STRING(80),
-			defaultValue: "Campus User",
-			field: "requested_by",
+			type: String,
+			default: "Campus User",
+			maxlength: 80,
 		},
 		requestedRole: {
-			type: DataTypes.ENUM("admin", "faculty", "student", "coordinator", ""),
-			defaultValue: "",
-			field: "requested_role",
+			type: String,
+			default: "",
+			enum: ["admin", "faculty", "student", "coordinator", ""],
 		},
 		status: {
-			type: DataTypes.ENUM("Pending", "Approved", "Rejected"),
-			defaultValue: "Pending",
+			type: String,
+			default: "Pending",
+			enum: ["Pending", "Approved", "Rejected"],
 		},
 	},
 	{
-		tableName: "bookings",
 		timestamps: true,
-		underscored: true,
-		indexes: [
-			{ fields: ["space_id", "date", "start", "end"] },
-			{ fields: ["space_id"] },
-			{ fields: ["date"] },
-			{ fields: ["status"] },
-		],
+		toJSON: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
+		toObject: {
+			virtuals: true,
+			transform: (doc, ret) => {
+				ret.id = ret._id ? ret._id.toString() : ret.id;
+				delete ret._id;
+				delete ret.__v;
+				return ret;
+			},
+		},
 	}
 );
 
-module.exports = Booking;
+bookingSchema.index({ spaceId: 1, date: 1, start: 1, end: 1 });
+bookingSchema.index({ spaceId: 1 });
+bookingSchema.index({ date: 1 });
+bookingSchema.index({ status: 1 });
+
+module.exports = mongoose.model("Booking", bookingSchema);

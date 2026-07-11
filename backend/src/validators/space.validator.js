@@ -64,13 +64,16 @@ const validateCreateSpace = (payload = {}) => {
 };
 
 const validateUpdateSpace = (payload = {}) => {
+	const mongoose = require("mongoose");
 	const errors = [];
 
-	const id = asNumber(payload.id);
+	const id = asString(payload.id);
 	const createResult = validateCreateSpace(payload);
 
-	if (!Number.isInteger(id) || id <= 0) {
-		errors.push("id must be a positive integer");
+	if (!id) {
+		errors.push("id is required");
+	} else if (!mongoose.Types.ObjectId.isValid(id)) {
+		errors.push("id must be a valid ObjectId");
 	}
 
 	return {

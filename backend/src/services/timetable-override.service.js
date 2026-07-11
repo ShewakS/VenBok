@@ -1,22 +1,25 @@
+const mongoose = require("mongoose");
 const ApiError = require("../utils/ApiError");
 const { TimetableOverride } = require("../models");
 
 const toPlain = (instance) => {
 	if (!instance) return null;
-	return instance.get ? instance.get({ plain: true }) : { ...instance };
+	return instance.toObject ? instance.toObject() : { ...instance };
 };
 
 const validateOverride = (payload = {}) => {
 	const errors = [];
 
-	const spaceId = Number(payload.spaceId);
+	const spaceId = typeof payload.spaceId === "string" ? payload.spaceId.trim() : "";
 	const date = typeof payload.date === "string" ? payload.date.trim() : "";
 	const start = typeof payload.start === "string" ? payload.start.trim() : "";
 	const end = typeof payload.end === "string" ? payload.end.trim() : "";
 	const status = typeof payload.status === "string" ? payload.status.trim() : "";
 
-	if (!Number.isInteger(spaceId) || spaceId <= 0) {
-		errors.push("spaceId must be a positive integer");
+	if (!spaceId) {
+		errors.push("spaceId is required");
+	} else if (!mongoose.Types.ObjectId.isValid(spaceId)) {
+		errors.push("spaceId must be a valid ObjectId");
 	}
 
 	if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -47,13 +50,13 @@ const validateOverride = (payload = {}) => {
 };
 
 const listOverrides = async (query = {}) => {
-	const spaceId = query.spaceId ? Number(query.spaceId) : undefined;
+	const spaceId = query.spaceId && typeof query.spaceId === "string" ? query.spaceId.trim() : undefined;
 	const date = typeof query.date === "string" ? query.date.trim() : undefined;
 	const status = typeof query.status === "string" ? query.status.trim() : undefined;
 
 	const where = {};
 
-	if (spaceId) {
+	if (spaceId && mongoose.Types.ObjectId.isValid(spaceId)) {
 		where.spaceId = spaceId;
 	}
 
@@ -65,10 +68,7 @@ const listOverrides = async (query = {}) => {
 		where.status = status;
 	}
 
-	const overrides = await TimetableOverride.findAll({
-		where,
-		order: [["date", "ASC"], ["start", "ASC"]],
-	});
+	const overrides = await TimetableOverride.find(where).sort({ date: 1, start: 1 });
 
 	return overrides.map(toPlain);
 };
@@ -85,14 +85,13 @@ const createOverride = async (payload = {}) => {
 };
 
 const deleteOverride = async (overrideId) => {
-	const id = Number(overrideId);
-	const override = await TimetableOverride.findByPk(id);
+	const override = await TimetableOverride.findById(overrideId);
 
 	if (!override) {
 		throw ApiError.notFound("Timetable override not found");
 	}
 
-	await override.destroy();
+	await override.deleteOne();
 	return toPlain(override);
 };
 

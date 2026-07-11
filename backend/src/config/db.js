@@ -1,191 +1,29 @@
-const { Sequelize } = require("sequelize");
+const mongoose = require("mongoose");
+const dns = require("dns").promises;
 const env = require("./env");
 const logger = require("../utils/logger");
 
-// ── Build Sequelize instance ────────────────────────────────────────────────
-let sequelize;
+// Set Google DNS servers to fix SRV record resolution on Windows
+dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
-if (env.databaseUrl) {
-	// Cloud platforms (Render, Railway, Heroku) provide a single connection URL
-	sequelize = new Sequelize(env.databaseUrl, {
-		dialect: "postgres",
-		protocol: "postgres",
-		dialectOptions: {
-			ssl: {
-				require: true,
-				rejectUnauthorized: false,
-			},
-		},
-		logging: false,
-	});
-} else {
-	if (!env.pgPassword) {
-		throw new Error("Database configuration missing: set DATABASE_URL or PG_PASSWORD in backend/.env");
-	}
-
-	if (env.pgPassword === "your_secure_password_here") {
-		throw new Error("Database configuration invalid: replace PG_PASSWORD placeholder in backend/.env");
-	}
-
-	// Local development — individual env vars
-	sequelize = new Sequelize(env.pgDatabase, env.pgUser, env.pgPassword, {
-		host: env.pgHost,
-		port: env.pgPort,
-		dialect: "postgres",
-		logging: false,
-	});
-}
-
-// ── Main connect function (called from server.js) ───────────────────────────
+// ── MongoDB connection ───────────────────────────────────────────────────────
 const connectDB = async () => {
 	try {
-		await sequelize.authenticate();
-		logger.info("PostgreSQL connected", {
-			host: env.databaseUrl ? "via DATABASE_URL" : env.pgHost,
-			database: env.pgDatabase,
+		const mongoUri = env.mongoUri || "mongodb+srv://user:Shewak08@venbok-database.nenrsob.mongodb.net/VenBok?appName=VenBok-Database";
+		
+		await mongoose.connect(mongoUri, {
+			serverSelectionTimeoutMS: 30000,
+			socketTimeoutMS: 45000,
 		});
-
-		// Sync only creates missing tables/columns according to model metadata.
-		// No mock/seed data is inserted automatically.
-		await sequelize.sync({ alter: false });
-
-		const queryInterface = sequelize.getQueryInterface();
-		const spaceTable = await queryInterface.describeTable("spaces");
-
-		if (!spaceTable.image_url) {
-			await queryInterface.addColumn("spaces", "image_url", {
-				type: Sequelize.TEXT,
-				allowNull: true,
-			});
-			logger.info("Added spaces.image_url column");
-		}
-
-		const bookingTable = await queryInterface.describeTable("bookings");
-
-		if (!bookingTable.created_at) {
-			await queryInterface.addColumn("bookings", "created_at", {
-				type: Sequelize.DATE,
-				allowNull: false,
-				defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-			});
-			logger.info("Added bookings.created_at column");
-		}
-
-		if (!bookingTable.updated_at) {
-			await queryInterface.addColumn("bookings", "updated_at", {
-				type: Sequelize.DATE,
-				allowNull: false,
-				defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-			});
-			logger.info("Added bookings.updated_at column");
-		}
-
-		if (bookingTable.requested_phone) {
-			await queryInterface.removeColumn("bookings", "requested_phone");
-			logger.info("Removed bookings.requested_phone column");
-		}
-
-		const userTable = await queryInterface.describeTable("users");
-
-		if (!userTable.phone) {
-			await queryInterface.addColumn("users", "phone", {
-				type: Sequelize.STRING(20),
-				allowNull: false,
-				defaultValue: "",
-			});
-			logger.info("Added users.phone column");
-		}
-
-		if (!userTable.role_description) {
-			await queryInterface.addColumn("users", "role_description", {
-				type: Sequelize.STRING(120),
-				allowNull: false,
-				defaultValue: "",
-			});
-			logger.info("Added users.role_description column");
-		}
-
-		if (!userTable.status) {
-			await queryInterface.addColumn("users", "status", {
-				type: Sequelize.STRING(16),
-				allowNull: false,
-				defaultValue: "active",
-			});
-			logger.info("Added users.status column");
-		}
-
-		// Remove legacy pending-approval workflow at DB level.
-		await sequelize.query("UPDATE users SET status = 'active' WHERE status IS NULL OR status = 'pending'");
-		await sequelize.query("ALTER TABLE users ALTER COLUMN status TYPE VARCHAR(16) USING status::text");
-		await sequelize.query("ALTER TABLE users ALTER COLUMN status SET DEFAULT 'active'");
-		await sequelize.query("ALTER TABLE users ALTER COLUMN status SET NOT NULL");
-		await sequelize.query(`
-			DO $$
-			BEGIN
-				IF NOT EXISTS (
-					SELECT 1
-					FROM pg_constraint
-					WHERE conname = 'users_status_active_check'
-				) THEN
-					ALTER TABLE users
-					ADD CONSTRAINT users_status_active_check CHECK (status = 'active');
-				END IF;
-			END $$;
-		`);
-
-		// Ensure timetable_overrides table exists
-		const tableList = await queryInterface.showAllTables();
-		if (!tableList.includes("timetable_overrides")) {
-			await queryInterface.createTable("timetable_overrides", {
-				id: {
-					type: Sequelize.INTEGER,
-					primaryKey: true,
-					autoIncrement: true,
-				},
-				space_id: {
-					type: Sequelize.INTEGER,
-					allowNull: false,
-				},
-				date: {
-					type: Sequelize.DATEONLY,
-					allowNull: false,
-				},
-				start: {
-					type: Sequelize.STRING(5),
-					allowNull: false,
-				},
-				end: {
-					type: Sequelize.STRING(5),
-					allowNull: false,
-				},
-				status: {
-					type: Sequelize.ENUM("academic", "available"),
-					allowNull: false,
-					defaultValue: "available",
-				},
-				created_at: {
-					type: Sequelize.DATE,
-					allowNull: false,
-					defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-				},
-				updated_at: {
-					type: Sequelize.DATE,
-					allowNull: false,
-					defaultValue: Sequelize.literal("CURRENT_TIMESTAMP"),
-				},
-			});
-			await queryInterface.addIndex("timetable_overrides", ["space_id", "date"]);
-			await queryInterface.addIndex("timetable_overrides", ["space_id"]);
-			await queryInterface.addIndex("timetable_overrides", ["date"]);
-			await queryInterface.addIndex("timetable_overrides", ["status"]);
-			logger.info("Created timetable_overrides table");
-		}
-
-		logger.info("Database tables synced");
+		
+		logger.info("MongoDB connected", {
+			host: "MongoDB Atlas",
+			database: "VenBok",
+		});
 	} catch (error) {
-		logger.error("PostgreSQL connection failed", error);
+		logger.error("MongoDB connection failed", error);
 		throw error;
 	}
 };
 
-module.exports = { sequelize, connectDB };
+module.exports = { connectDB };

@@ -25,7 +25,7 @@ const validateCreateBooking = (payload = {}) => {
 
 	const title = asString(payload.title);
 	const type = asString(payload.type);
-	const spaceId = asNumber(payload.spaceId);
+	const spaceId = asString(payload.spaceId);
 	const date = asString(payload.date);
 	const start = asString(payload.start);
 	const end = asString(payload.end);
@@ -48,8 +48,11 @@ const validateCreateBooking = (payload = {}) => {
 		errors.push(`type must be one of: ${BOOKING_TYPES.join(", ")}`);
 	}
 
-	if (!Number.isInteger(spaceId) || spaceId <= 0) {
-		errors.push("spaceId must be a positive integer");
+	const mongoose = require("mongoose");
+	if (!spaceId) {
+		errors.push("spaceId is required");
+	} else if (!mongoose.Types.ObjectId.isValid(spaceId)) {
+		errors.push("spaceId must be a valid ObjectId");
 	}
 
 	if (!isValidDate(date)) {
@@ -129,12 +132,13 @@ const validateBookingStatusUpdate = (payload = {}) => {
 const validateBookingQuery = (query = {}) => {
 	const errors = [];
 
-	const spaceId = query.spaceId === undefined ? undefined : asNumber(query.spaceId);
+	const spaceId = query.spaceId === undefined ? undefined : asString(query.spaceId);
 	const status = query.status === undefined ? undefined : asString(query.status);
 	const date = query.date === undefined ? undefined : asString(query.date);
 
-	if (spaceId !== undefined && (!Number.isInteger(spaceId) || spaceId <= 0)) {
-		errors.push("spaceId must be a positive integer when provided");
+	const mongoose = require("mongoose");
+	if (spaceId !== undefined && (!spaceId || !mongoose.Types.ObjectId.isValid(spaceId))) {
+		errors.push("spaceId must be a valid ObjectId when provided");
 	}
 
 	if (status !== undefined && status && !BOOKING_STATUSES.includes(status)) {

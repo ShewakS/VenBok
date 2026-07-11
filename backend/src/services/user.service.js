@@ -3,7 +3,7 @@ const { User } = require("../models");
 const { USER_ROLES } = require("../validators/auth.validator");
 
 const sanitizeUser = (user) => {
-	const plain = user.get ? user.get({ plain: true }) : { ...user };
+	const plain = user.toObject ? user.toObject() : { ...user };
 	const { password, ...safeUser } = plain;
 	return safeUser;
 };
@@ -23,12 +23,12 @@ const listUsers = async (query = {}) => {
 	}
 
 	const where = role ? { role } : {};
-	const users = await User.findAll({ where, order: [["createdAt", "DESC"]] });
+	const users = await User.find(where).sort({ createdAt: -1 });
 	return users.map(sanitizeUser);
 };
 
 const getUserById = async (userId) => {
-	const user = await User.findByPk(userId);
+	const user = await User.findById(userId);
 
 	if (!user) {
 		throw ApiError.notFound("User not found");
@@ -38,7 +38,7 @@ const getUserById = async (userId) => {
 };
 
 const updateUser = async (userId, payload = {}) => {
-	const existing = await User.findByPk(userId);
+	const existing = await User.findById(userId);
 
 	if (!existing) {
 		throw ApiError.notFound("User not found");
@@ -59,22 +59,22 @@ const updateUser = async (userId, payload = {}) => {
 		throw ApiError.badRequest(`role must be one of: ${USER_ROLES.join(", ")}`);
 	}
 
-	await existing.update({
-		...(name !== undefined ? { name } : {}),
-		...(role !== undefined ? { role } : {}),
-	});
+	const updateData = {};
+	if (name !== undefined) updateData.name = name;
+	if (role !== undefined) updateData.role = role;
 
-	return sanitizeUser(existing);
+	const updated = await User.findByIdAndUpdate(userId, updateData, { new: true });
+	return sanitizeUser(updated);
 };
 
 const deleteUser = async (userId) => {
-	const user = await User.findByPk(userId);
+	const user = await User.findById(userId);
 
 	if (!user) {
 		throw ApiError.notFound("User not found");
 	}
 
-	await user.destroy();
+	await user.deleteOne();
 	return sanitizeUser(user);
 };
 

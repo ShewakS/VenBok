@@ -6,10 +6,10 @@ const logger = require("../utils/logger");
 // Set Google DNS servers to fix SRV record resolution on Windows
 dns.setServers(["8.8.8.8", "8.8.4.4"]);
 
-// ── MongoDB connection ───────────────────────────────────────────────────────
+
 const connectDB = async () => {
 	try {
-		const mongoUri = env.mongoUri || "mongodb+srv://user:Shewak08@venbok-database.nenrsob.mongodb.net/VenBok?appName=VenBok-Database";
+		const mongoUri = env.mongoUri ;
 		
 		await mongoose.connect(mongoUri, {
 			serverSelectionTimeoutMS: 30000,
